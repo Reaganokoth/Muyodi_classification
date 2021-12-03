@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document id="root_doc">
+<Schema name="kilifi" id="kilifi">
+	<SimpleField name="id" type="float"></SimpleField>
+	<SimpleField name="area name" type="string"></SimpleField>
+</Schema>
+<Folder><name>kilifi</name>
+  <Placemark>
+	<Style><LineStyle><color>ff0000ff</color></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style>
+	<ExtendedData><SchemaData schemaUrl="#kilifi">
+		<SimpleData name="id">1</SimpleData>
+	</SchemaData></ExtendedData>
+      <MultiGeometry><Polygon><outerBoundaryIs><LinearRing><coordinates>39.837335161443,-3.66568643098329 39.8479340166481,-3.6632257663209 39.8523870078975,-3.66245451182491 39.858900887659,-3.66129762883498 39.8668500290628,-3.66008565457568 39.8677700685772,-3.6688265230701 39.8681748859635,-3.67415180020928 39.868211687544,-3.67540048128502 39.8665556164182,-3.67782438661782 39.8636482915529,-3.67888943384659 39.8595265145287,-3.6809093475079 39.8557727533102,-3.68230492154351 39.8490380640653,-3.68098279882746 39.8440698506879,-3.67903633681273 39.8421561684981,-3.67859562784164 39.8411993274032,-3.67947704556587 39.8398008673414,-3.67848545056481 39.839322446794,-3.67617172460561 39.8371879551207,-3.6748863187008 39.8372247567013,-3.6718013369737 39.8371879551207,-3.66587006240309 39.837335161443,-3.66568643098329</coordinates></LinearRing></outerBoundaryIs></Polygon></MultiGeometry>
+  </Placemark>
+</Folder>
+</Document></kml>

@@ -1,0 +1,172 @@
+---
+title: "Classification_Muyodi_Based on polygon"
+author: "Ronald Reagan Okoth"
+date: "12/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Install packages needed for this session
+```{r}
+library(raster)
+library(sf)
+library(sp)
+library(rgdal)
+library(dplyr)
+library(tibble)
+library(randomForest)
+library(rasterVis)
+library(ggplot2)
+
+```
+
+- Define path to the rastyer images and the training data
+- Read the csv file containing training data,
+- Transform it to a spatial object and reproject it to the projection of the raster files
+
+```{r}
+raster_path <-  '/Users/rragankonywa/OneDrive/Moyodi_classification/Data/Muyodi_images_2019/'
+train_data_path <- '/Users/rragankonywa/OneDrive/Moyodi_classification/Data/training_data_clean4.shp'
+
+# read the csv file
+train_data <- st_read(train_data_path)[1]
+# grab the crs of one of the raster files
+raster_crs <- crs(stack(paste0(raster_path, list.files(raster_path)[1])))
+#crs(train_data)
+#crs(train_data)
+
+```
+
+ Order the data based on the Name column then
+ Create a column in gthe training data with unique class id for each class
+```{r}
+train_data <- train_data[order(train_data$Name), ]
+id = list()
+all_Names <- train_data$Name
+unique_Names <- unique(all_Names)
+
+for(i in 1:length(unique_Names)){
+  x <- all_Names[all_Names==unique_Names[i]] 
+  id <- append(id,rep(i, length(x))) %>% 
+    unlist()
+}
+
+
+train_data <- train_data %>% 
+  add_column(id, .before="Name")
+
+train_data
+```
+
+
+Overlay the training polygpns on an RGB image to visualize the data a bit
+Normaly, one would need to make sure the crs of the shapefile and that of the raster are similayr for the overlay to work properly
+```{r}
+sample_raster <- stack(paste0(raster_path, list.files(raster_path)[1]))
+plotRGB(sample_raster, r=4,g=3,b=2, scale= 65535, stretch= "lin")
+plot(train_data[1], add = TRUE, lwd = 2, ext = extent(sample_raster), border = "red")
+train_data <- st_zm(train_data)
+
+```
+
+For Each Year (only working with 2019 fir this case) read each image, subset only bands (blue, green, red and NIR)
+and stack the bands in a single image with many bands (nbands = 4*the number of images u have foe a particulare year)
+```{r}
+band_subset <- c(2,3,4,8) 
+raster_files <- list.files(raster_path, pattern = ".tif")
+final_stack <- stack()
+bandnames <- c("B", "G", "R", "NIR", "ndvi")
+#bandnames <- c(paste0("B",1:12), "ndvi")
+for(i in 1:length(raster_files)) {
+  bandname <- unlist(lapply(bandnames, function(each){
+    paste0(each,"_", "img", i)
+  }))
+  raster_image <- stack(paste0(raster_path, raster_files[i]))[[c(2,3,4,8)]]
+  ndvi <- (raster_image[[4]]-raster_image[[3]])/(raster_image[[4]]+raster_image[[3]])
+  #ndvi <- (raster_image[[8]]-raster_image[[4]])/(raster_image[[8]]+raster_image[[4]])
+  raster_with_ndvi <- stack(raster_image,ndvi)
+  names(raster_with_ndvi) <- bandname
+  
+  final_stack <- stack(final_stack,raster_with_ndvi)
+}
+
+
+```
+
+
+Load the boundary of the AOI and use it to mask the raster stack
+This is needed to remove the black areas with no data... the dark region around the RGB plot above
+
+```{r}
+roi <-  st_read("/Users/rragankonywa/OneDrive/Moyodi_classification/Data/plan A/polygon project Area/PA.shp") %>% 
+  st_transform(crs = crs(train_data))
+
+final_stack <- mask(final_stack, roi)
+
+```
+
+Now extract raster values at each training point for each band in the final_stack
+
+```{r}
+train_df <- extract(final_stack, train_data, df = T, fun= mean)
+
+```
+
+Add the class and id variables from the original train csv(train_data) as columns in the extracted values (train_df)
+
+```{r}
+train_df_final <- train_df %>% 
+  select(-ID) %>% 
+  add_column(train_data %>% 
+  select(id), .before="B_img1") %>% 
+  select(-geometry)
+
+train_df_final <- train_df_final[complete.cases(train_df_final),]
+
+```
+
+Fitting the model randomforest
+```{r}
+
+train_df_final$id <- factor(train_df_final$id)
+
+# TODO: check proper settings of random forest algorithm
+rfmodel <- randomForest(id ~., data = train_df_final, ntree =3000, nmtry = 400)
+rfmodel
+```
+
+```{r}
+predicted <- predict(final_stack, rfmodel)
+
+plot(predicted)
+```
+
+```{r}
+class_names <- train_data$Name %>% 
+  unique()
+class_id <- train_data$id %>% 
+  unique()
+#x <- as.data.frame(cbind(class_names,class_id))
+classcolor <- c("#5475A8", "#B50000", "#D2CDC0", "#38814E", "#AF963C", "#D1D182", "#FBF65D", "#C8E6F8")
+```
+
+
+```{r}
+predicted2 <- ratify(predicted)
+predicted2 <- as.factor(predicted2)
+rat <- levels(predicted2)[[1]]
+rat[["zn"]] <- c(class_names)
+levels(predicted2) <- rat
+
+#rasterVis::levelplot(predicted2)
+
+levelplot(predicted2, maxpixels = 1e6,
+          col.regions = classcolor,
+          scales=list(draw=FALSE),
+          main = "Random Forest")
+
+```
+
